@@ -1,6 +1,6 @@
 {
   "name": "@whppt/cli",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "types/index.d.ts",
@@ -9,6 +9,7 @@
     "/types",
     "/files"
   ],
+  "access": "public",
   "repository": "git@github.com:whpptjs/whppt-deployment.git",
   "author": "Whppt Team",
   "license": "MIT",
