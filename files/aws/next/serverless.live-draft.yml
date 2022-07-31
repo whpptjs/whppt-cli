@@ -1,0 +1,56 @@
+plugins:
+  - serverless-s3-sync
+  - serverless-cloudfront-invalidate
+
+service: <service-name>
+frameworkVersion: '2 || 3'
+
+custom:
+  client: <client>
+  project: <project>
+  staticBucket: ${sls:stage}.static.${self:custom.project}.${self:custom.client}
+  staticBucketUser: ${sls:stage}.staticUser.${self:custom.project}.${self:custom.client}
+  staticUserAccessParameter: ${sls:stage}.staticUserAccessSecret.${self:custom.project}.${self:custom.client}
+  s3Sync:
+    - ${file(./.deploy/serverless.common.yml):SyncNext}
+    - ${file(./.deploy/serverless.common.yml):SyncPublic}
+  siteCachePolicyId: fea95533-f5d0-494f-94fa-ce4592f771b9
+  siteOriginDomainName: pub.${sls:stage}.${self:custom.project}.svelteteam.com
+  cloudfrontInvalidate:
+    - ${file(./.deploy/serverless.common.yml):CDNInvalidateAll}
+
+provider:
+  name: aws
+  runtime: nodejs14.x
+  tags:
+    client: ${self:custom.client}
+    project: ${self:custom.project}
+
+functions:
+  website:
+    name: ${self:custom.client}-${self:custom.project}-${sls:stage}
+    description: ${self:custom.client}-${self:custom.project}-${sls:stage}
+    handler: ./requestHandler.render
+    events:
+      - httpApi:
+          method: ANY
+          path: /
+      - httpApi:
+          method: ANY
+          path: /{any+}
+    tags:
+      client: ${self:custom.client}
+      project: ${self:custom.project}
+    environment:
+      NEXT_PUBLIC_BASE_API_URL: http://localhost:3001
+      NEXT_PUBLIC_DRAFT: true
+
+resources:
+  Resources:
+    StaticFilesUser: ${file(./.deploy/serverless.common.yml):StaticFilesUser}
+    StaticFilesUserAccessKey: ${file(./.deploy/serverless.common.yml):StaticFilesUserAccessKey}
+    StaticFilesUserAccessParameter: ${file(./.deploy/serverless.common.yml):StaticFilesUserAccessParameter}
+    StaticFiles: ${file(./.deploy/serverless.common.yml):StaticFiles}
+    StaticFilesS3BucketPolicy: ${file(./.deploy/serverless.common.yml):StaticFilesS3BucketPolicy}
+    SiteDistribution: ${file(./.deploy/serverless.common.yml):SiteDistribution}
+  Outputs: ${file(./.deploy/serverless.common.yml):Outputs}

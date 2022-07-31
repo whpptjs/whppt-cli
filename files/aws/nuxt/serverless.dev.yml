@@ -1,0 +1,28 @@
+service: <service-name>
+frameworkVersion: '2 || 3'
+variablesResolutionMode: 20210326
+
+custom:
+  client: <client>
+  project: <project>
+  storageBucket: ${sls:stage}.storage.${self:custom.project}.${self:custom.client}
+  storageBucketUser: ${sls:stage}.storageUser.${self:custom.project}.${self:custom.client}
+  storageUserAccessParameter: ${sls:stage}.storageUserAccessSecret.${self:custom.project}.${self:custom.client}
+
+provider:
+  name: aws
+  runtime: nodejs14.x
+  lambdaHashingVersion: '20201221'
+  tags:
+    client: ${self:custom.client}
+    project: ${self:custom.project}
+  httpApi:
+    useProviderTags: true
+
+resources:
+  Resources:
+    StaticFilesUser: ${file(./.deploy/serverless.common.yml):StaticFilesUser}
+    StaticFilesUserAccessKey: ${file(./.deploy/serverless.common.yml):StaticFilesUserAccessKey}
+    StaticFilesUserAccessParameter: ${file(./.deploy/serverless.common.yml):StaticFilesUserAccessParameter}
+    StaticFiles: ${file(./.deploy/serverless.common.yml):StaticFiles}
+    StaticFilesS3BucketPolicy: ${file(./.deploy/serverless.common.yml):StaticFilesS3BucketPolicy}

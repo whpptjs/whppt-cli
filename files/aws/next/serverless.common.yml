@@ -1,0 +1,148 @@
+StaticFilesUser:
+  Type: AWS::IAM::User
+  Properties:
+    UserName: ${self:custom.staticBucketUser}
+    ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/AmazonS3FullAccess
+    Tags:
+      - Key: client
+        Value: ${self:custom.client}
+      - Key: project
+        Value: ${self:custom.project}
+
+StaticFilesUserAccessKey:
+  Type: AWS::IAM::AccessKey
+  Properties:
+    Serial: 1
+    Status: Active
+    UserName:
+      Ref: StaticFilesUser
+
+StaticFilesUserAccessParameter:
+  Type: AWS::SSM::Parameter
+  Properties:
+    Name: ${self:custom.staticUserAccessParameter}
+    Type: String
+    Value:
+      Fn::GetAtt: [StaticFilesUserAccessKey, SecretAccessKey]
+    Tags:
+      client: ${self:custom.client}
+      project: ${self:custom.project}
+
+StaticFiles:
+  Type: AWS::S3::Bucket
+  Properties:
+    AccessControl: PublicRead
+    BucketName: ${self:custom.staticBucket}
+    PublicAccessBlockConfiguration:
+      BlockPublicAcls: false
+      BlockPublicPolicy: false
+      IgnorePublicAcls: false
+      RestrictPublicBuckets: false
+    Tags:
+      - Key: client
+        Value: ${self:custom.client}
+      - Key: project
+        Value: ${self:custom.project}
+
+StaticFilesS3BucketPolicy:
+  Type: AWS::S3::BucketPolicy
+  Properties:
+    Bucket:
+      Ref: StaticFiles
+    PolicyDocument:
+      Statement:
+        - Sid: PublicReadGetObject
+          Effect: Allow
+          Principal: '*'
+          Action:
+            - s3:GetObject
+          Resource:
+            Fn::Join: ['', ['arn:aws:s3:::', { 'Ref': 'StaticFiles' }, '/*']]
+
+SyncNext:
+  bucketName: ${self:custom.staticBucket}
+  acl: public-read
+  bucketPrefix: _next/static/
+  localDir: ../static
+  deleteRemoved: true
+
+SyncPublic:
+  bucketName: ${self:custom.staticBucket}
+  acl: public-read
+  bucketPrefix: public/
+  localDir: ../../public/public
+  deleteRemoved: true
+
+SiteDistribution:
+  Type: AWS::CloudFront::Distribution
+  Properties:
+    Tags:
+      - Key: client
+        Value: ${self:custom.client}
+      - Key: project
+        Value: ${self:custom.project}
+    DistributionConfig:
+      Comment: ${self:custom.client}-${self:custom.project}
+      Enabled: 'true'
+      DefaultRootObject: ''
+      DefaultCacheBehavior:
+        AllowedMethods:
+          - GET
+          - HEAD
+          - OPTIONS
+        TargetOriginId: siteOrigin
+        CachePolicyId: ${self:custom.siteCachePolicyId}
+        ViewerProtocolPolicy: https-only
+      CacheBehaviors:
+        - AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          TargetOriginId: siteStaticOrigin
+          ForwardedValues:
+            QueryString: 'false'
+          ViewerProtocolPolicy: redirect-to-https
+          MinTTL: '0'
+          MaxTTL: '86400000'
+          DefaultTTL: '86400000'
+          PathPattern: _next/*
+        - AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          TargetOriginId: siteStaticOrigin
+          ForwardedValues:
+            QueryString: 'false'
+          ViewerProtocolPolicy: redirect-to-https
+          MinTTL: '0'
+          MaxTTL: '86400000'
+          DefaultTTL: '86400000'
+          PathPattern: public/*
+      Origins:
+        - DomainName:
+            Fn::Join:
+              - ''
+              - - Ref: HttpApi
+                - '.execute-api.${aws:region}.amazonaws.com'
+          Id: siteOrigin
+          CustomOriginConfig:
+            OriginProtocolPolicy: https-only
+        - DomainName: ${self:custom.staticBucket}.s3.amazonaws.com
+          Id: siteStaticOrigin
+          S3OriginConfig:
+            OriginAccessIdentity:
+
+  # - distributionId: 'CLOUDFRONT_DIST_ID' #conditional, distributionId or distributionIdKey is required.
+  # distributionIdKey: 'CDNDistributionId' #conditional, distributionId or distributionIdKey is required.
+  # Ref: SiteDistribution
+CDNInvalidateAll:
+  distributionIdKey: CDNDistributionId
+  items:
+    - '/*'
+
+Outputs:
+  CDNDistributionId:
+    Description: CDN distribution id.
+    Value:
+      Ref: SiteDistribution

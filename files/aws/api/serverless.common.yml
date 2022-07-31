@@ -1,0 +1,286 @@
+StaticFilesUser:
+  Type: AWS::IAM::User
+  Properties:
+    UserName: ${self:custom.storageBucketUser}
+    ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/AmazonS3FullAccess
+    Tags:
+      - Key: client
+        Value: ${self:custom.client}
+      - Key: project
+        Value: ${self:custom.project}
+
+StaticFilesUserAccessKey:
+  Type: AWS::IAM::AccessKey
+  Properties:
+    Serial: 1
+    Status: Active
+    UserName:
+      Ref: StaticFilesUser
+
+StaticFilesUserAccessParameter:
+  Type: AWS::SSM::Parameter
+  Properties:
+    Name: ${self:custom.storageUserAccessParameter}
+    Type: String
+    Value:
+      Fn::GetAtt: [StaticFilesUserAccessKey, SecretAccessKey]
+    Tags:
+      client: ${self:custom.client}
+      project: ${self:custom.project}
+
+StaticFiles:
+  Type: AWS::S3::Bucket
+  Properties:
+    AccessControl: PublicRead
+    BucketName: ${self:custom.storageBucket}
+    PublicAccessBlockConfiguration:
+      BlockPublicAcls: false
+      BlockPublicPolicy: false
+      IgnorePublicAcls: false
+      RestrictPublicBuckets: false
+    Tags:
+      - Key: client
+        Value: ${self:custom.client}
+      - Key: project
+        Value: ${self:custom.project}
+
+StaticFilesS3BucketPolicy:
+  Type: AWS::S3::BucketPolicy
+  Properties:
+    Bucket:
+      Ref: StaticFiles
+    PolicyDocument:
+      Statement:
+        - Sid: PublicReadGetObject
+          Effect: Allow
+          Principal: '*'
+          Action:
+            - s3:GetObject
+          Resource:
+            Fn::Join: ['', ['arn:aws:s3:::', { 'Ref': 'StaticFiles' }, '/*']]
+        - Sid: WebsiteFullAccess
+          Effect: Allow
+          Principal:
+            AWS:
+              Fn::GetAtt: [StaticFilesUser, Arn]
+          Action:
+            - s3:*
+          Resource:
+            Fn::Join: ['', ['arn:aws:s3:::', { 'Ref': 'StaticFiles' }, '/*']]
+
+DraftTargetGroup:
+  Type: AWS::ElasticLoadBalancingV2::TargetGroup
+  Properties:
+    Name: ${self:custom.draftTargetGroupName}
+    HealthCheckEnabled: true
+    HealthCheckIntervalSeconds: 60
+    HealthCheckPath: /health
+    Port: 80
+    Protocol: HTTP
+    ProtocolVersion: HTTP1
+    Tags:
+      - Key: client
+        Value: ${self:custom.client}
+      - Key: project
+        Value: ${self:custom.project}
+    VpcId: vpc-0d3d2bd4f9b438c04
+    TargetType: ip
+
+PubTargetGroup:
+  Type: AWS::ElasticLoadBalancingV2::TargetGroup
+  Properties:
+    Name: ${self:custom.pugTargetGroupName}
+    HealthCheckEnabled: true
+    HealthCheckIntervalSeconds: 60
+    HealthCheckPath: /health
+    Port: 80
+    Protocol: HTTP
+    ProtocolVersion: HTTP1
+    Tags:
+      - Key: client
+        Value: ${self:custom.client}
+      - Key: project
+        Value: ${self:custom.project}
+    VpcId: vpc-0d3d2bd4f9b438c04
+    TargetType: ip
+
+SiteLoadBalancer:
+  Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+  Properties:
+    Name: ${self:custom.loadBalancerName}
+    Type: application
+    IpAddressType: ipv4
+    Scheme: internet-facing
+    SecurityGroups:
+      - sg-0257352938cdb3277
+    Subnets:
+      - subnet-002512189a26b66e4
+      - subnet-082f957ed1e5477c7
+    Tags:
+      - Key: client
+        Value: ${self:custom.client}
+      - Key: project
+        Value: ${self:custom.project}
+
+SiteLoadBalancerListener80:
+  Type: AWS::ElasticLoadBalancingV2::Listener
+  Properties:
+    LoadBalancerArn:
+      Ref: SiteLoadBalancer
+    Port: 80
+    Protocol: HTTP
+    DefaultActions:
+      - Type: 'redirect'
+        RedirectConfig:
+          Protocol: 'HTTPS'
+          Port: 443
+          Host: www.${self:custom.draftLoadBalancerApexRuleHostHeader}
+          Path: '/#{path}'
+          Query: '#{query}'
+          StatusCode: 'HTTP_301'
+
+SiteLoadBalancerListener443:
+  Type: AWS::ElasticLoadBalancingV2::Listener
+  Properties:
+    Certificates:
+      - CertificateArn: arn:aws:acm:ap-southeast-2:993572211001:certificate/5846bd5d-6ef8-4f32-b01a-bcdbe1b92260
+    LoadBalancerArn:
+      Ref: SiteLoadBalancer
+    Port: 443
+    Protocol: HTTPS
+    SslPolicy: ELBSecurityPolicy-2016-08
+    DefaultActions:
+      - Type: 'forward'
+        TargetGroupArn:
+          Ref: PubTargetGroup
+
+SiteLoadBalancerListener443RuleDraftSiteRule:
+  Type: AWS::ElasticLoadBalancingV2::ListenerRule
+  Properties:
+    Actions:
+      - Type: 'forward'
+        TargetGroupArn:
+          Ref: DraftTargetGroup
+    Conditions:
+      - Field: host-header
+        Values:
+          - ${self:custom.draftLoadBalancerDraftRuleHostHeader}
+    ListenerArn:
+      Ref: SiteLoadBalancerListener443
+    Priority: 1
+
+SiteLoadBalancerListener443RuleApexRedirectRule:
+  Type: AWS::ElasticLoadBalancingV2::ListenerRule
+  Properties:
+    Actions:
+      - Type: 'redirect'
+        RedirectConfig:
+          Protocol: HTTPS
+          Port: 443
+          Host: www.${self:custom.draftLoadBalancerApexRuleHostHeader}
+          Path: '/#{path}'
+          Query: '#{query}'
+          StatusCode: HTTP_301
+    Conditions:
+      - Field: host-header
+        Values:
+          - ${self:custom.draftLoadBalancerApexRuleHostHeader}
+    ListenerArn:
+      Ref: SiteLoadBalancerListener443
+    Priority: 2
+
+SiteLoadBalancerListenerCert:
+  Type: AWS::ElasticLoadBalancingV2::ListenerCertificate
+  Properties:
+    Certificates:
+      - CertificateArn:
+          Ref: SiteLoadBalancerCertificate
+    ListenerArn:
+      Ref: SiteLoadBalancerListener443
+
+SiteLoadBalancerCertificate:
+  Type: AWS::CertificateManager::Certificate
+  Properties:
+    DomainName: ${self:custom.loadBalancerCertDNS}
+    DomainValidationOptions:
+      - DomainName: ${self:custom.loadBalancerCertDNS}
+        HostedZoneId: Z1BSDLMVKKY288
+    Tags:
+      - Key: client
+        Value: ${self:custom.client}
+      - Key: project
+        Value: ${self:custom.project}
+    ValidationMethod: DNS
+
+SiteLoadBalancerGlobalAccelerator:
+  Type: AWS::GlobalAccelerator::Accelerator
+  Properties:
+    Name: ${self:custom.globalAcceleratorName}
+    Enabled: true
+    IpAddressType: IPV4
+    Tags:
+      - Key: client
+        Value: ${self:custom.client}
+      - Key: project
+        Value: ${self:custom.project}
+
+SiteLoadBalanceGlobalAcceleratorListener:
+  Type: AWS::GlobalAccelerator::Listener
+  Properties:
+    AcceleratorArn:
+      Ref: SiteLoadBalancerGlobalAccelerator
+    PortRanges:
+      - FromPort: 80
+        ToPort: 80
+    Protocol: TCP
+
+SiteLoadBalanceGlobalAcceleratorEndpointGroup:
+  Type: AWS::GlobalAccelerator::EndpointGroup
+  Properties:
+    ListenerArn:
+      Ref: SiteLoadBalanceGlobalAcceleratorListener
+    EndpointGroupRegion: ap-southeast-2
+    EndpointConfigurations:
+      - ClientIPPreservationEnabled: true
+        EndpointId:
+          Ref: SiteLoadBalancer
+        Weight: 128
+
+DockerRepository:
+  Type: AWS::ECR::Repository
+  Properties:
+    RepositoryName: ${self:custom.ecsRepositoryName}
+    LifecyclePolicy:
+      LifecyclePolicyText: ${file(.deploy/dockerRepoLifecyclePolicy.js):dockerLifecyclePolicyKeepTen}
+    Tags:
+      - Key: client
+        Value: ${self:custom.client}
+      - Key: project
+        Value: ${self:custom.project}
+
+SiteDistribution:
+  Type: AWS::CloudFront::Distribution
+  Properties:
+    Tags:
+      - Key: client
+        Value: ${self:custom.client}
+      - Key: project
+        Value: ${self:custom.project}
+    DistributionConfig:
+      Comment: ${self:custom.client}-${self:custom.project}
+      Enabled: 'true'
+      DefaultRootObject: '/img/*'
+      DefaultCacheBehavior:
+        AllowedMethods:
+          - GET
+          - HEAD
+          - OPTIONS
+        TargetOriginId: siteOrigin
+        CachePolicyId: fea95533-f5d0-494f-94fa-ce4592f771b9
+        ViewerProtocolPolicy: https-only
+      Origins:
+        - DomainName: ${self:custom.siteOriginDomainName}
+          Id: siteOrigin
+          CustomOriginConfig:
+            OriginProtocolPolicy: https-only

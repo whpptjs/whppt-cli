@@ -1,0 +1,31 @@
+{
+  "name": "@whppt/cli",
+  "version": "0.0.0",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "types/index.d.ts",
+  "files": [
+    "/dist",
+    "/types",
+    "/files"
+  ],
+  "repository": "git@github.com:whpptjs/whppt-deployment.git",
+  "author": "Whppt Team",
+  "license": "MIT",
+  "bin": {
+    "whppt": "dist/cli/index.js"
+  },
+  "scripts": {
+    "watch": "rm -rf dist && rm -rf types && tsc --watch",
+    "build": "rm -rf dist && rm -rf types && tsc"
+  },
+  "dependencies": {
+    "serverless-cloudfront-invalidate": "^1.12.2",
+    "serverless-s3-sync": "^3.0.0",
+    "yargs": "^17.5.1"
+  },
+  "devDependencies": {
+    "@types/node": "^18.6.1",
+    "@types/yargs": "^17.0.10"
+  }
+}

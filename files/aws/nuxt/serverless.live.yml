@@ -1,0 +1,51 @@
+service: <service-name>
+frameworkVersion: '2 || 3'
+variablesResolutionMode: 20210326
+
+custom:
+  client: <client>
+  project: <project>
+  storageBucket: ${sls:stage}.storage.${self:custom.project}.${self:custom.client}
+  storageBucketUser: ${sls:stage}.storageUser.${self:custom.project}.${self:custom.client}
+  storageUserAccessParameter: ${sls:stage}.storageUserAccessSecret.${self:custom.project}.${self:custom.client}
+  draftTargetGroupName: draft-${sls:stage}-${self:custom.project}-${self:custom.client}
+  pugTargetGroupName: pub-${sls:stage}-${self:custom.project}-${self:custom.client}
+  loadBalancerName: ${sls:stage}-${self:custom.project}-${self:custom.client}
+  loadBalancerCertDNS: '*.${sls:stage}.platinumway.svelteteam.com'
+  draftLoadBalancerDraftRuleHostHeader: draft.${sls:stage}.platinumway.svelteteam.com
+  draftLoadBalancerApexRuleHostHeader: platinumway.com.au
+  globalAcceleratorName: ${sls:stage}-${self:custom.project}-${self:custom.client}
+  ecsRepositoryName: ${sls:stage}-${self:custom.project}-${self:custom.client}
+  siteOriginDomainName: pub.${sls:stage}.${self:custom.project}.svelteteam.com
+
+provider:
+  name: aws
+  runtime: nodejs14.x
+  lambdaHashingVersion: '20201221'
+  tags:
+    client: ${self:custom.client}
+    project: ${self:custom.project}
+  httpApi:
+    useProviderTags: true
+
+resources:
+  Resources:
+    StaticFilesUser: ${file(./.deploy/serverless.common.yml):StaticFilesUser}
+    StaticFilesUserAccessKey: ${file(./.deploy/serverless.common.yml):StaticFilesUserAccessKey}
+    StaticFilesUserAccessParameter: ${file(./.deploy/serverless.common.yml):StaticFilesUserAccessParameter}
+    StaticFiles: ${file(./.deploy/serverless.common.yml):StaticFiles}
+    StaticFilesS3BucketPolicy: ${file(./.deploy/serverless.common.yml):StaticFilesS3BucketPolicy}
+    DraftTargetGroup: ${file(./.deploy/serverless.common.yml):DraftTargetGroup}
+    PubTargetGroup: ${file(./.deploy/serverless.common.yml):PubTargetGroup}
+    SiteLoadBalancerCertificate: ${file(./.deploy/serverless.common.yml):SiteLoadBalancerCertificate}
+    SiteLoadBalancer: ${file(./.deploy/serverless.common.yml):SiteLoadBalancer}
+    SiteLoadBalancerListener80: ${file(./.deploy/serverless.common.yml):SiteLoadBalancerListener80}
+    SiteLoadBalancerListener443: ${file(./.deploy/serverless.common.yml):SiteLoadBalancerListener443}
+    SiteLoadBalancerListener443RuleDraftSiteRule: ${file(./.deploy/serverless.common.yml):SiteLoadBalancerListener443RuleDraftSiteRule}
+    SiteLoadBalancerListener443RuleApexRedirectRule: ${file(./.deploy/serverless.common.yml):SiteLoadBalancerListener443RuleApexRedirectRule}
+    SiteLoadBalancerListenerCert: ${file(./.deploy/serverless.common.yml):SiteLoadBalancerListenerCert}
+    SiteLoadBalancerGlobalAccelerator: ${file(./.deploy/serverless.common.yml):SiteLoadBalancerGlobalAccelerator}
+    SiteLoadBalanceGlobalAcceleratorListener: ${file(./.deploy/serverless.common.yml):SiteLoadBalanceGlobalAcceleratorListener}
+    SiteLoadBalanceGlobalAcceleratorEndpointGroup: ${file(./.deploy/serverless.common.yml):SiteLoadBalanceGlobalAcceleratorEndpointGroup}
+    DockerRepository: ${file(./.deploy/serverless.common.yml):DockerRepository}
+    SiteDistribution: ${file(./.deploy/serverless.common.yml):SiteDistribution}
